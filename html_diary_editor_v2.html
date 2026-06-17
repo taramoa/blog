@@ -1,0 +1,143 @@
+
+<h2 class="sr-only">HTMLファイルに書き出せる日記エディタ。タイトル・本文を入力してHTMLを生成できます。</h2>
+
+<div style="padding: 1rem 0;">
+
+<div style="display:flex; gap:12px; margin-bottom:12px; align-items:center;">
+  <input id="title-input" type="text" placeholder="タイトル（任意）" style="flex:1;" />
+  <button id="now-btn" style="white-space:nowrap; font-size:13px; padding:0 14px;">
+    <i class="ti ti-clock" aria-hidden="true"></i> 今の時刻を記録
+  </button>
+</div>
+
+<div style="font-size:13px; color:var(--color-text-secondary); margin-bottom:6px;" id="ts-preview">
+  日時：（「今の時刻を記録」を押してください）
+</div>
+
+<textarea id="body-input" placeholder="日記の本文を書く..." style="width:100%; min-height:140px; resize:vertical; box-sizing:border-box; font-size:14px; line-height:1.7;"></textarea>
+
+<div style="display:flex; gap:8px; margin-top:10px;">
+  <button id="add-btn">この記事を追加 ↗</button>
+  <button id="clear-btn" style="color:var(--color-text-secondary);">クリア</button>
+</div>
+
+<div id="preview-area" style="margin-top:2rem; display:none;">
+  <div style="font-size:13px; color:var(--color-text-secondary); margin-bottom:8px;">プレビュー</div>
+  <div id="preview-entries" style="border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-lg); padding:1rem 1.25rem; background:var(--color-background-primary);"></div>
+
+  <div style="margin-top:1.5rem;">
+    <div style="font-size:13px; color:var(--color-text-secondary); margin-bottom:8px;">
+      生成されたHTML（コピーして <code>index.html</code> に貼り付ける）
+    </div>
+    <textarea id="html-output" readonly style="width:100%; min-height:180px; font-family:var(--font-mono); font-size:12px; line-height:1.6; resize:vertical; box-sizing:border-box; background:var(--color-background-secondary);"></textarea>
+    <button id="copy-btn" style="margin-top:8px; font-size:13px;">
+      <i class="ti ti-copy" aria-hidden="true"></i> HTMLをコピー
+    </button>
+  </div>
+</div>
+
+</div>
+
+<script>
+let entries = [];
+let currentTs = null;
+const DAYS = ['日','月','火','水','木','金','土'];
+
+function formatTs(d) {
+  const pad = n => String(n).padStart(2,'0');
+  const day = DAYS[d.getDay()];
+  return d.getFullYear()+'年'+pad(d.getMonth()+1)+'月'+pad(d.getDate())+'日（'+day+'）'
+    +pad(d.getHours())+'時'+pad(d.getMinutes())+'分'+pad(d.getSeconds())+'秒';
+}
+
+document.getElementById('now-btn').addEventListener('click', () => {
+  currentTs = new Date();
+  document.getElementById('ts-preview').textContent = '日時：' + formatTs(currentTs);
+});
+
+document.getElementById('add-btn').addEventListener('click', () => {
+  const title = document.getElementById('title-input').value.trim();
+  const body = document.getElementById('body-input').value.trim();
+  if (!body) { alert('本文を入力してください'); return; }
+  if (!currentTs) { alert('「今の時刻を記録」を押してください'); return; }
+  entries.unshift({ title, body, ts: currentTs });
+  document.getElementById('title-input').value = '';
+  document.getElementById('body-input').value = '';
+  document.getElementById('ts-preview').textContent = '日時：（「今の時刻を記録」を押してください）';
+  currentTs = null;
+  render();
+});
+
+document.getElementById('clear-btn').addEventListener('click', () => {
+  document.getElementById('title-input').value = '';
+  document.getElementById('body-input').value = '';
+  document.getElementById('ts-preview').textContent = '日時：（「今の時刻を記録」を押してください）';
+  currentTs = null;
+});
+
+document.getElementById('copy-btn').addEventListener('click', () => {
+  const ta = document.getElementById('html-output');
+  ta.select();
+  document.execCommand('copy');
+  const btn = document.getElementById('copy-btn');
+  btn.innerHTML = 'コピーしました！';
+  setTimeout(() => { btn.innerHTML = '<i class="ti ti-copy" aria-hidden="true"></i> HTMLをコピー'; }, 1500);
+});
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function bodyToHtml(body) {
+  return body.split('\n').map(l => '  <p>' + escHtml(l) + '</p>').join('\n');
+}
+
+function entryHtml(e) {
+  const tsStr = formatTs(e.ts);
+  const titleLine = e.title ? `<strong>${escHtml(e.title)}</strong>  ` : '';
+  return `<hr>\n<p>${titleLine}<em>${tsStr}</em></p>\n<blockquote>\n${bodyToHtml(e.body)}\n</blockquote>`;
+}
+
+function fullHtml(entries) {
+  const body = entries.map(entryHtml).join('\n\n');
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>日記</title>
+<style>
+  body { max-width: 680px; margin: 2rem auto; padding: 0 1rem;
+         font-family: sans-serif; line-height: 1.8; color: #333; }
+  blockquote { border-left: 3px solid #ccc; margin: 0.5rem 0;
+               padding: 0.5rem 1rem; color: #444; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 2rem 0; }
+  em { font-size: 0.85em; color: #888; }
+</style>
+</head>
+<body>
+<h1>日記</h1>
+${body}
+<hr>
+</body>
+</html>`;
+}
+
+function render() {
+  if (entries.length === 0) return;
+  document.getElementById('preview-area').style.display = 'block';
+
+  const previewEl = document.getElementById('preview-entries');
+  previewEl.innerHTML = entries.map(e => {
+    const tsStr = formatTs(e.ts);
+    const titleHtml = e.title ? `<strong>${escHtml(e.title)}</strong>&nbsp;&nbsp;` : '';
+    const bodyHtml = e.body.split('\n').map(l => `<p style="margin:4px 0">${escHtml(l)}</p>`).join('');
+    return `<div style="margin-bottom:1.2rem; padding-bottom:1.2rem; border-bottom:0.5px solid var(--color-border-tertiary);">
+      <div style="font-size:13px; margin-bottom:6px;">${titleHtml}<span style="color:var(--color-text-secondary); font-style:italic;">${tsStr}</span></div>
+      <div style="border-left:3px solid var(--color-border-secondary); padding-left:12px; font-size:14px; color:var(--color-text-secondary);">${bodyHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('html-output').value = fullHtml(entries);
+}
+</script>
